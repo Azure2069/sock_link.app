@@ -21,5 +21,3 @@ class HomeScreen extends StatelessWidget {
     );
   }
 }
-git branch -M main
-azure@Azures-MacBook-Air sokko_link % git push -u origin main
