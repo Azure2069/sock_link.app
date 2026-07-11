@@ -17,6 +17,7 @@ class HomeScreen extends StatelessWidget {
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: GridView.count(
+          //padding: const EdgeInsets.all(16),
           crossAxisCount: 2,
           children: [
             ActionCard(

@@ -5,8 +5,6 @@ class ActionCard extends StatelessWidget {
   final String title;
   final VoidCallback onTap;
 
-
-  
   const ActionCard({
     super.key,
     required this.icon,
@@ -23,6 +21,7 @@ class ActionCard extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(icon, size: 32),
               const SizedBox(height: 8),
