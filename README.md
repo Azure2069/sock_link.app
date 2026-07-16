@@ -1,17 +1,18 @@
-# sokko_link
+# Market Mate — complete offline MVP
 
-A new Flutter project.
+Copy `lib/` and `pubspec.yaml` into your Flutter project.
 
-## Getting Started
+Run:
 
-This project is a starting point for a Flutter application.
+```bash
+flutter clean
+flutter pub get
+dart run build_runner build --delete-conflicting-outputs
+flutter run
+```
 
-A few resources to get you started if this is your first Flutter project:
+The generated `lib/core/database/app_database.g.dart` is required and must not be edited manually.
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+For Android, launch an emulator and use `flutter devices`, then `flutter run -d <android-device-id>`.
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+To reset all local data while testing, uninstall the app from the emulator/device and reinstall it.
