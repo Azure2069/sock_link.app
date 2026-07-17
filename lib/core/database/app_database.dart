@@ -191,7 +191,101 @@ class AppDatabase extends _$AppDatabase {
           }
           if (from < 3) await m.createTable(paymentRequests);
         },
+        beforeOpen: (_) => _seedGroceryCatalogue(),
       );
+
+  /// Adds presentation-ready stock to a new or otherwise empty shop.
+  ///
+  /// Existing catalogues are left untouched, so reopening the app never
+  /// duplicates products that a shop owner has already added.
+  Future<void> _seedGroceryCatalogue() async {
+    if ((await select(products).get()).isNotEmpty) return;
+
+    const catalogue = <_SeedProduct>[
+      _SeedProduct('Royal Aroma Rice 5kg', 'RICE-ROYAL-5KG', 'Grains & Staples',
+          105, 125, 24, 'bags', 5),
+      _SeedProduct('Gino Tomato Paste 210g', 'GINO-TP-210G', 'Canned Foods',
+          8.50, 11, 48, 'tins', 12),
+      _SeedProduct('Frytol Vegetable Oil 1L', 'FRYTOL-OIL-1L',
+          'Cooking Essentials', 29, 35, 30, 'bottles', 8),
+      _SeedProduct('Lele Tasty Rice 5kg', 'LELE-RICE-5KG', 'Grains & Staples',
+          92, 110, 20, 'bags', 5),
+      _SeedProduct('Oba Spaghetti 500g', 'OBA-SPAG-500G', 'Grains & Staples',
+          10, 13, 40, 'packs', 10),
+      _SeedProduct('Tasty Tom Jollof Mix 400g', 'TT-JOLLOF-400G',
+          'Canned Foods', 15, 19, 32, 'tins', 8),
+      _SeedProduct('Ideal Milk 400g', 'IDEAL-MILK-400G', 'Dairy & Breakfast',
+          16, 20, 36, 'tins', 10),
+      _SeedProduct('Nido Milk Powder 400g', 'NIDO-400G', 'Dairy & Breakfast',
+          55, 65, 18, 'tins', 5),
+      _SeedProduct(
+          'Milo 400g', 'MILO-400G', 'Dairy & Breakfast', 40, 48, 24, 'tins', 6),
+      _SeedProduct('Quaker Oats 500g', 'QUAKER-500G', 'Dairy & Breakfast', 25,
+          31, 20, 'packs', 5),
+      _SeedProduct('Geisha Bathing Soap 225g', 'GEISHA-225G',
+          'Household & Personal Care', 9, 12, 48, 'bars', 12),
+      _SeedProduct('Key Soap 200g', 'KEY-SOAP-200G',
+          'Household & Personal Care', 7, 9.50, 36, 'bars', 10),
+      _SeedProduct('So Klin Washing Powder 900g', 'SOKLIN-900G',
+          'Household & Personal Care', 26, 32, 20, 'packs', 5),
+      _SeedProduct('Pepsodent Toothpaste 140g', 'PEPS-140G',
+          'Household & Personal Care', 16, 20, 25, 'tubes', 6),
+      _SeedProduct('Voltic Mineral Water 1.5L', 'VOLTIC-1.5L', 'Drinks', 6, 8,
+          60, 'bottles', 15),
+      _SeedProduct(
+          'Coca-Cola 500ml', 'COKE-500ML', 'Drinks', 7, 9, 48, 'bottles', 12),
+      _SeedProduct('Blue Skies Pineapple Juice 1L', 'BS-PINE-1L', 'Drinks', 28,
+          35, 16, 'cartons', 4),
+      _SeedProduct('Plantain Chips 80g', 'PLANTAIN-CHIPS-80G', 'Snacks', 6, 8,
+          35, 'packs', 10),
+      _SeedProduct('McVitie\'s Digestive Biscuits 250g', 'MCV-DIG-250G',
+          'Snacks', 18, 23, 24, 'packs', 6),
+      _SeedProduct('Fresh Eggs (Crate of 30)', 'EGGS-CRATE-30', 'Fresh Foods',
+          52, 65, 12, 'crates', 3),
+      _SeedProduct(
+          'Local Onions 1kg', 'ONION-1KG', 'Fresh Foods', 14, 18, 25, 'kg', 6),
+      _SeedProduct('Fresh Tomatoes 1kg', 'TOMATO-1KG', 'Fresh Foods', 18, 24,
+          22, 'kg', 5),
+    ];
+
+    await transaction(() async {
+      final categoryIds = <String, int>{};
+      for (final item in catalogue) {
+        if (!categoryIds.containsKey(item.category)) {
+          await into(categories).insert(
+            CategoriesCompanion.insert(name: item.category),
+            mode: InsertMode.insertOrIgnore,
+          );
+          categoryIds[item.category] = await (select(categories)
+                ..where((row) => row.name.equals(item.category)))
+              .map((row) => row.id)
+              .getSingle();
+        }
+
+        final productId = await into(products).insert(
+          ProductsCompanion.insert(
+            name: item.name,
+            sku: Value(item.sku),
+            categoryId: Value(categoryIds[item.category]),
+            costPrice: item.costPrice,
+            sellingPrice: item.sellingPrice,
+            quantity: Value(item.quantity),
+            unit: Value(item.unit),
+            minimumStock: Value(item.minimumStock),
+            notes: const Value('Demo grocery stock'),
+          ),
+        );
+        await into(stockMovements).insert(
+          StockMovementsCompanion.insert(
+            productId: productId,
+            type: 'opening',
+            quantity: item.quantity,
+            note: const Value('Demo catalogue opening stock'),
+          ),
+        );
+      }
+    });
+  }
 
   Future<BusinessData?> getBusiness() => select(businesses).getSingleOrNull();
   Stream<List<ProductData>> watchProducts() =>
@@ -417,6 +511,28 @@ class PaymentInput {
       this.network,
       this.phone,
       this.reference});
+}
+
+class _SeedProduct {
+  final String name;
+  final String sku;
+  final String category;
+  final double costPrice;
+  final double sellingPrice;
+  final double quantity;
+  final String unit;
+  final double minimumStock;
+
+  const _SeedProduct(
+    this.name,
+    this.sku,
+    this.category,
+    this.costPrice,
+    this.sellingPrice,
+    this.quantity,
+    this.unit,
+    this.minimumStock,
+  );
 }
 
 LazyDatabase _openConnection() => LazyDatabase(() async {

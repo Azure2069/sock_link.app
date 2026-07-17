@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -17,7 +18,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   final Map<int, double> cart = {};
   final paid = TextEditingController();
   final paymentPhone = TextEditingController();
+  final productSearch = TextEditingController();
   int? customer;
+  CustomerData? newlyAddedCustomer;
+  String searchQuery = '';
   double discount = 0;
   String method = 'cash';
   String? paystackReference;
@@ -27,13 +31,26 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   void dispose() {
     paid.dispose();
     paymentPhone.dispose();
+    productSearch.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final products = ref.watch(productsProvider).valueOrNull ?? [];
-    final customers = ref.watch(customersProvider).valueOrNull ?? [];
+    final watchedCustomers = ref.watch(customersProvider).valueOrNull ?? [];
+    final customers = [
+      ...watchedCustomers,
+      if (newlyAddedCustomer != null &&
+          !watchedCustomers.any((item) => item.id == newlyAddedCustomer!.id))
+        newlyAddedCustomer!,
+    ];
+    final visibleProducts = products.where((product) {
+      final query = searchQuery.trim().toLowerCase();
+      if (query.isEmpty) return true;
+      return product.name.toLowerCase().contains(query) ||
+          (product.sku?.toLowerCase().contains(query) ?? false);
+    }).toList();
     final lines = cart.entries
         .where((entry) => entry.value > 0)
         .map((entry) => CartLine(
@@ -47,28 +64,66 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Checkout')),
       body: ListView(padding: const EdgeInsets.all(16), children: [
-        DropdownButtonFormField<int?>(
-          initialValue: customer,
-          decoration: const InputDecoration(
-              labelText: 'Customer (required for credit)'),
-          items: [
-            const DropdownMenuItem<int?>(
-                value: null, child: Text('Walk-in customer')),
-            ...customers.map((item) =>
-                DropdownMenuItem<int?>(value: item.id, child: Text(item.name))),
-          ],
-          onChanged: (value) => setState(() {
-            customer = value;
-            if (value != null) {
-              paymentPhone.text =
-                  customers.firstWhere((item) => item.id == value).phone;
-            }
-          }),
-        ),
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Expanded(
+            child: DropdownButtonFormField<int?>(
+              key: ValueKey((customer, customers.length)),
+              initialValue: customer,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                  labelText: 'Customer (required for credit)'),
+              items: [
+                const DropdownMenuItem<int?>(
+                    value: null, child: Text('Walk-in customer')),
+                ...customers.map((item) => DropdownMenuItem<int?>(
+                    value: item.id, child: Text(item.name))),
+              ],
+              onChanged: (value) => setState(() {
+                customer = value;
+                if (value != null) {
+                  paymentPhone.text =
+                      customers.firstWhere((item) => item.id == value).phone;
+                }
+              }),
+            ),
+          ),
+          const SizedBox(width: 8),
+          IconButton.filledTonal(
+            tooltip: 'Add new customer',
+            onPressed: _addCustomer,
+            icon: const Icon(Icons.person_add_alt_1),
+          ),
+        ]),
         const SizedBox(height: 16),
         Text('Products', style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 8),
-        ...products.map((product) {
+        TextField(
+          controller: productSearch,
+          textInputAction: TextInputAction.search,
+          decoration: InputDecoration(
+            labelText: 'Search products',
+            hintText: 'Search by name or SKU',
+            prefixIcon: const Icon(Icons.search),
+            suffixIcon: searchQuery.isEmpty
+                ? null
+                : IconButton(
+                    tooltip: 'Clear search',
+                    onPressed: () {
+                      productSearch.clear();
+                      setState(() => searchQuery = '');
+                    },
+                    icon: const Icon(Icons.clear),
+                  ),
+          ),
+          onChanged: (value) => setState(() => searchQuery = value),
+        ),
+        const SizedBox(height: 8),
+        if (visibleProducts.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 24),
+            child: Center(child: Text('No matching products')),
+          ),
+        ...visibleProducts.map((product) {
           final count = cart[product.id] ?? 0;
           return Card(
             child: ListTile(
@@ -119,12 +174,28 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         ),
         const SizedBox(height: 12),
         if (method == 'momo') ...[
-          TextField(
-            controller: paymentPhone,
-            keyboardType: TextInputType.phone,
-            decoration: const InputDecoration(
-              labelText: 'Customer mobile number',
-              hintText: 'e.g. 024 123 4567',
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Mobile Money details',
+                      style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: paymentPhone,
+                    keyboardType: TextInputType.phone,
+                    autofillHints: const [AutofillHints.telephoneNumber],
+                    decoration: const InputDecoration(
+                      labelText: 'MoMo phone number *',
+                      hintText: 'e.g. 024 123 4567',
+                      prefixIcon: Icon(Icons.phone_android),
+                      helperText: 'Enter the number that will make the payment',
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 10),
@@ -224,6 +295,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       : 'paystack:${paystackPayment.channel ?? 'online'}',
                   amount: amount,
                   network: paystackPayment?.channel,
+                  phone: method == 'momo' ? paymentPhone.text.trim() : null,
                   reference: paystackPayment?.reference)
             ]
           : <PaymentInput>[];
@@ -245,6 +317,103 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     } finally {
       if (mounted) setState(() => busy = false);
     }
+  }
+
+  Future<void> _addCustomer() async {
+    final name = TextEditingController();
+    final phone = TextEditingController();
+    final address = TextEditingController();
+    var busy = false;
+    String? error;
+
+    final saved = await showDialog<CustomerData>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Add customer'),
+          content: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              TextField(
+                controller: name,
+                autofocus: true,
+                textCapitalization: TextCapitalization.words,
+                decoration: InputDecoration(
+                  labelText: 'Customer name *',
+                  errorText: error,
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: phone,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(
+                  labelText: 'Phone number',
+                  hintText: 'e.g. 024 123 4567',
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: address,
+                textCapitalization: TextCapitalization.words,
+                decoration: const InputDecoration(labelText: 'Address'),
+              ),
+            ]),
+          ),
+          actions: [
+            TextButton(
+              onPressed: busy ? null : () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: busy
+                  ? null
+                  : () async {
+                      if (name.text.trim().isEmpty) {
+                        setDialogState(() => error = 'Enter the customer name');
+                        return;
+                      }
+                      setDialogState(() {
+                        busy = true;
+                        error = null;
+                      });
+                      try {
+                        final db = ref.read(databaseProvider);
+                        final id = await db.into(db.customers).insert(
+                              CustomersCompanion.insert(
+                                name: name.text.trim(),
+                                phone: Value(phone.text.trim()),
+                                address: Value(address.text.trim()),
+                              ),
+                            );
+                        final created = await (db.select(db.customers)
+                              ..where((row) => row.id.equals(id)))
+                            .getSingle();
+                        if (dialogContext.mounted) {
+                          Navigator.pop(dialogContext, created);
+                        }
+                      } catch (saveError) {
+                        setDialogState(() {
+                          busy = false;
+                          error = '$saveError';
+                        });
+                      }
+                    },
+              child: Text(busy ? 'Saving...' : 'Save customer'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    name.dispose();
+    phone.dispose();
+    address.dispose();
+    if (saved == null || !mounted) return;
+    setState(() {
+      newlyAddedCustomer = saved;
+      customer = saved.id;
+      paymentPhone.text = saved.phone;
+    });
   }
 
   Widget _row(String label, double value, {bool bold = false}) => Padding(
