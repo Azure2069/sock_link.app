@@ -423,5 +423,5 @@ LazyDatabase _openConnection() => LazyDatabase(() async {
       final dir = await getApplicationSupportDirectory();
       if (!await dir.exists()) await dir.create(recursive: true);
       return NativeDatabase.createInBackground(
-          File(p.join(dir.path, 'market_mate.sqlite')));
+          File(p.join(dir.path, 'sokko_link.sqlite')));
     });

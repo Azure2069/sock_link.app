@@ -1,6 +1,6 @@
 {
-    "name": "Market Mate",
-    "short_name": "Market Mate",
+    "name": "SokoLink",
+    "short_name": "SokoLink",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#F3F8EA",

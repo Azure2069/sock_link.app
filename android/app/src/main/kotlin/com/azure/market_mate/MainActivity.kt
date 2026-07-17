@@ -1,4 +1,4 @@
-package com.azure.market_mate
+package com.azure.sokko_link
 
 import io.flutter.embedding.android.FlutterActivity
 

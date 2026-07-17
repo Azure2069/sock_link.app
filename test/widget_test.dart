@@ -7,14 +7,14 @@
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:market_mate/app.dart';
+import 'package:sokko_link/app.dart';
 
 void main() {
   testWidgets('App starts', (WidgetTester tester) async {
     await tester.pumpWidget(
-      const ProviderScope(child: MarketMateApp()),
+      const ProviderScope(child: SokoLinkApp()),
     );
 
-    expect(find.byType(MarketMateApp), findsOneWidget);
+    expect(find.byType(SokoLinkApp), findsOneWidget);
   });
 }

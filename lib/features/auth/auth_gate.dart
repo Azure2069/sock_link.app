@@ -120,7 +120,7 @@ class _RegistrationScreenState extends ConsumerState<RegistrationScreen> {
                                     color:
                                         Theme.of(context).colorScheme.primary),
                                 const SizedBox(height: 12),
-                                Text('Set up Market Mate',
+                                Text('Set up SokoLink',
                                     style: Theme.of(context)
                                         .textTheme
                                         .headlineMedium,

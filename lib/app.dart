@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'features/auth/auth_gate.dart';
 
-class MarketMateApp extends StatelessWidget {
-  const MarketMateApp({super.key});
+class SokoLinkApp extends StatelessWidget {
+  const SokoLinkApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -40,7 +40,7 @@ class MarketMateApp extends StatelessWidget {
       surfaceContainer: const Color(0xFF173324),
     );
     return MaterialApp(
-      title: 'Market Mate',
+      title: 'SokoLink',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: lightScheme,
