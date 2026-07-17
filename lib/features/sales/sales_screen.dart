@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/providers.dart';
 import '../../core/utils.dart';
+import '../debts/debts_screen.dart';
 import 'checkout_screen.dart';
 import 'sale_detail_screen.dart';
 
@@ -11,7 +12,19 @@ class SalesScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final s = ref.watch(salesProvider);
     return Scaffold(
-        appBar: AppBar(title: const Text('Sales')),
+        appBar: AppBar(
+          title: const Text('Sales'),
+          actions: [
+            IconButton(
+              tooltip: 'Outstanding debts',
+              icon: const Icon(Icons.account_balance_wallet_outlined),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const DebtsScreen()),
+              ),
+            ),
+          ],
+        ),
         floatingActionButton: FloatingActionButton.extended(
             onPressed: () => Navigator.push(context,
                 MaterialPageRoute(builder: (_) => const CheckoutScreen())),

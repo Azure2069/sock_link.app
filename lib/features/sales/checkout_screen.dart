@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/database/app_database.dart';
+import '../../core/payments/paystack_service.dart';
 import '../../core/providers.dart';
 import '../../core/utils.dart';
 
@@ -14,19 +16,17 @@ class CheckoutScreen extends ConsumerStatefulWidget {
 class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   final Map<int, double> cart = {};
   final paid = TextEditingController();
-  final phone = TextEditingController();
-  final reference = TextEditingController();
+  final paymentPhone = TextEditingController();
   int? customer;
   double discount = 0;
   String method = 'cash';
-  String network = 'MTN';
+  String? paystackReference;
   bool busy = false;
 
   @override
   void dispose() {
     paid.dispose();
-    phone.dispose();
-    reference.dispose();
+    paymentPhone.dispose();
     super.dispose();
   }
 
@@ -57,7 +57,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             ...customers.map((item) =>
                 DropdownMenuItem<int?>(value: item.id, child: Text(item.name))),
           ],
-          onChanged: (value) => setState(() => customer = value),
+          onChanged: (value) => setState(() {
+            customer = value;
+            if (value != null) {
+              paymentPhone.text =
+                  customers.firstWhere((item) => item.id == value).phone;
+            }
+          }),
         ),
         const SizedBox(height: 16),
         Text('Products', style: Theme.of(context).textTheme.titleLarge),
@@ -101,33 +107,33 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           decoration: const InputDecoration(labelText: 'Payment method'),
           items: const [
             DropdownMenuItem(value: 'cash', child: Text('Cash')),
-            DropdownMenuItem(value: 'momo', child: Text('MoMo')),
+            DropdownMenuItem(
+                value: 'momo', child: Text('Mobile Money / Paystack')),
             DropdownMenuItem(value: 'credit', child: Text('Credit')),
             DropdownMenuItem(value: 'split', child: Text('Split / partial')),
           ],
-          onChanged: (value) => setState(() => method = value!),
+          onChanged: (value) => setState(() {
+            method = value!;
+            paystackReference = null;
+          }),
         ),
         const SizedBox(height: 12),
         if (method == 'momo') ...[
-          DropdownButtonFormField<String>(
-            initialValue: network,
-            decoration: const InputDecoration(labelText: 'Network'),
-            items: const [
-              DropdownMenuItem(value: 'MTN', child: Text('MTN')),
-              DropdownMenuItem(value: 'Telecel', child: Text('Telecel')),
-              DropdownMenuItem(value: 'AT', child: Text('AT')),
-            ],
-            onChanged: (value) => setState(() => network = value!),
+          TextField(
+            controller: paymentPhone,
+            keyboardType: TextInputType.phone,
+            decoration: const InputDecoration(
+              labelText: 'Customer mobile number',
+              hintText: 'e.g. 024 123 4567',
+            ),
           ),
           const SizedBox(height: 10),
-          TextField(
-              controller: phone,
-              decoration:
-                  const InputDecoration(labelText: 'MoMo phone number')),
-          const SizedBox(height: 10),
-          TextField(
-              controller: reference,
-              decoration: const InputDecoration(labelText: 'Reference')),
+          Text(
+            paystackReference == null
+                ? 'Paystack Checkout will open. Select Mobile Money and the customer network there.'
+                : 'Complete payment in Paystack Checkout, then return and verify it.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
         ],
         if (method == 'split')
           TextField(
@@ -152,7 +158,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               busy || lines.isEmpty ? null : () => _completeSale(lines, total),
           child: Padding(
               padding: const EdgeInsets.all(14),
-              child: Text(busy ? 'Saving...' : 'Complete sale')),
+              child: Text(busy
+                  ? 'Please wait...'
+                  : method == 'momo'
+                      ? paystackReference == null
+                          ? 'Open Paystack checkout'
+                          : 'Verify payment & complete sale'
+                      : 'Complete sale')),
         ),
       ]),
     );
@@ -161,6 +173,42 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   Future<void> _completeSale(List<CartLine> lines, double total) async {
     setState(() => busy = true);
     try {
+      PaystackVerification? paystackPayment;
+      if (method == 'momo') {
+        if (paymentPhone.text.replaceAll(RegExp(r'\D'), '').length < 9) {
+          throw StateError('Enter a valid customer mobile number.');
+        }
+        final service = ref.read(paystackProvider);
+        if (paystackReference == null) {
+          final checkout = await service.initialize(
+            phone: paymentPhone.text,
+            amount: total,
+            debtId: 0,
+            saleId: 0,
+          );
+          paystackReference = checkout.reference;
+          var opened = await launchUrl(
+            checkout.authorizationUrl,
+            mode: LaunchMode.inAppBrowserView,
+          );
+          if (!opened) {
+            opened = await launchUrl(
+              checkout.authorizationUrl,
+              mode: LaunchMode.externalApplication,
+            );
+          }
+          if (!opened) throw StateError('Could not open Paystack Checkout.');
+          if (mounted) setState(() => busy = false);
+          return;
+        }
+        paystackPayment = await service.verify(
+          reference: paystackReference!,
+          expectedAmount: total,
+        );
+        if (!paystackPayment.paid) {
+          throw StateError('Payment is not successful yet.');
+        }
+      }
       final amount = method == 'credit'
           ? 0.0
           : method == 'split'
@@ -169,11 +217,14 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       final payments = amount > 0
           ? [
               PaymentInput(
-                  method: method == 'split' ? 'cash' : method,
+                  method: paystackPayment == null
+                      ? method == 'split'
+                          ? 'cash'
+                          : method
+                      : 'paystack:${paystackPayment.channel ?? 'online'}',
                   amount: amount,
-                  network: method == 'momo' ? network : null,
-                  phone: method == 'momo' ? phone.text : null,
-                  reference: method == 'momo' ? reference.text : null)
+                  network: paystackPayment?.channel,
+                  reference: paystackPayment?.reference)
             ]
           : <PaymentInput>[];
       await ref.read(databaseProvider).createSale(

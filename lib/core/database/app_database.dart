@@ -119,6 +119,20 @@ class DebtPayments extends Table {
       integer().references(Debts, #id, onDelete: KeyAction.cascade)();
   RealColumn get amount => real()();
   TextColumn get method => text().withDefault(const Constant('cash'))();
+  TextColumn get reference => text().nullable().unique()();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+}
+
+@DataClassName('PaymentRequestData')
+class PaymentRequests extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get debtId =>
+      integer().references(Debts, #id, onDelete: KeyAction.cascade)();
+  RealColumn get amount => real()();
+  TextColumn get phone => text()();
+  TextColumn get reference => text().unique()();
+  TextColumn get authorizationUrl => text()();
+  TextColumn get status => text().withDefault(const Constant('pending'))();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 }
 
@@ -153,6 +167,7 @@ class StockMovements extends Table {
   Payments,
   Debts,
   DebtPayments,
+  PaymentRequests,
   Expenses,
   StockMovements
 ])
@@ -160,7 +175,23 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 3;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+        onCreate: (m) => m.createAll(),
+        onUpgrade: (m, from, to) async {
+          if (from < 2) {
+            await customStatement(
+                'ALTER TABLE debt_payments ADD COLUMN reference TEXT');
+            await customStatement(
+              'CREATE UNIQUE INDEX debt_payments_reference_unique '
+              'ON debt_payments (reference)',
+            );
+          }
+          if (from < 3) await m.createTable(paymentRequests);
+        },
+      );
 
   Future<BusinessData?> getBusiness() => select(businesses).getSingleOrNull();
   Stream<List<ProductData>> watchProducts() =>
@@ -175,6 +206,10 @@ class AppDatabase extends _$AppDatabase {
       (select(sales)..orderBy([(t) => OrderingTerm.desc(t.createdAt)])).watch();
   Stream<List<DebtData>> watchDebts() =>
       (select(debts)..orderBy([(t) => OrderingTerm.desc(t.createdAt)])).watch();
+  Stream<List<PaymentRequestData>> watchPaymentRequests() =>
+      (select(paymentRequests)
+            ..orderBy([(t) => OrderingTerm.desc(t.createdAt)]))
+          .watch();
   Stream<List<ExpenseData>> watchExpenses() =>
       (select(expenses)..orderBy([(t) => OrderingTerm.desc(t.createdAt)]))
           .watch();
@@ -267,14 +302,23 @@ class AppDatabase extends _$AppDatabase {
         return saleId;
       });
 
-  Future<void> recordDebtPayment(DebtData debt, double amount, String method) =>
+  Future<void> recordDebtPayment(
+    DebtData debt,
+    double amount,
+    String method, {
+    String? reference,
+  }) =>
       transaction(() async {
         if (amount <= 0 || amount > debt.balance + 0.005)
           throw StateError('Enter a valid amount.');
         final newBalance =
             (debt.balance - amount).clamp(0, double.infinity).toDouble();
         await into(debtPayments).insert(DebtPaymentsCompanion.insert(
-            debtId: debt.id, amount: amount, method: Value(method)));
+          debtId: debt.id,
+          amount: amount,
+          method: Value(method),
+          reference: Value(reference),
+        ));
         await (update(debts)..where((t) => t.id.equals(debt.id)))
             .write(DebtsCompanion(
           balance: Value(newBalance),
@@ -290,6 +334,25 @@ class AppDatabase extends _$AppDatabase {
               sale.paid + amount >= sale.total - 0.005 ? 'paid' : 'partial'),
         ));
       });
+
+  Future<void> savePaymentRequest({
+    required int debtId,
+    required double amount,
+    required String phone,
+    required String reference,
+    required String authorizationUrl,
+  }) =>
+      into(paymentRequests).insert(PaymentRequestsCompanion.insert(
+        debtId: debtId,
+        amount: amount,
+        phone: phone,
+        reference: reference,
+        authorizationUrl: authorizationUrl,
+      ));
+
+  Future<void> markPaymentRequestPaid(String reference) =>
+      (update(paymentRequests)..where((t) => t.reference.equals(reference)))
+          .write(const PaymentRequestsCompanion(status: Value('paid')));
 
   Future<double> todaySalesTotal() async {
     final now = DateTime.now();
@@ -311,8 +374,8 @@ class AppDatabase extends _$AppDatabase {
       final items = await (select(saleItems)
             ..where((t) => t.saleId.equals(sale.id)))
           .get();
-      profit +=
-          items.fold<double>(0, (s, i) => s + (i.unitPrice - i.costPrice) * i.quantity);
+      profit += items.fold<double>(
+          0, (s, i) => s + (i.unitPrice - i.costPrice) * i.quantity);
       profit -= sale.discount;
     }
     return profit;

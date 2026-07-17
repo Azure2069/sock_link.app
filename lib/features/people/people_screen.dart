@@ -87,54 +87,85 @@ class _PeopleList extends StatelessWidget {
 }
 
 Future<void> _personDialog(
-    BuildContext context, WidgetRef ref, bool customer) async {
+        BuildContext context, WidgetRef ref, bool customer) =>
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => _PersonDialog(ref: ref, customer: customer),
+    );
+
+class _PersonDialog extends StatefulWidget {
+  const _PersonDialog({required this.ref, required this.customer});
+
+  final WidgetRef ref;
+  final bool customer;
+
+  @override
+  State<_PersonDialog> createState() => _PersonDialogState();
+}
+
+class _PersonDialogState extends State<_PersonDialog> {
   final name = TextEditingController();
   final phone = TextEditingController();
   final address = TextEditingController();
-  await showDialog<void>(
-    context: context,
-    builder: (dialogContext) => AlertDialog(
-      title: Text(customer ? 'Add customer' : 'Add supplier'),
-      content: Column(mainAxisSize: MainAxisSize.min, children: [
-        TextField(
-            controller: name,
-            decoration: const InputDecoration(labelText: 'Name')),
-        const SizedBox(height: 10),
-        TextField(
-            controller: phone,
-            decoration: const InputDecoration(labelText: 'Phone')),
-        const SizedBox(height: 10),
-        TextField(
-            controller: address,
-            decoration: const InputDecoration(labelText: 'Address')),
-      ]),
-      actions: [
-        TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel')),
-        FilledButton(
-          onPressed: () async {
-            if (name.text.trim().isEmpty) return;
-            final db = ref.read(databaseProvider);
-            if (customer) {
-              await db.into(db.customers).insert(CustomersCompanion.insert(
-                  name: name.text.trim(),
-                  phone: Value(phone.text.trim()),
-                  address: Value(address.text.trim())));
-            } else {
-              await db.into(db.suppliers).insert(SuppliersCompanion.insert(
-                  name: name.text.trim(),
-                  phone: Value(phone.text.trim()),
-                  address: Value(address.text.trim())));
-            }
-            if (dialogContext.mounted) Navigator.pop(dialogContext);
-          },
-          child: const Text('Save'),
-        ),
-      ],
-    ),
-  );
-  name.dispose();
-  phone.dispose();
-  address.dispose();
+  bool busy = false;
+
+  @override
+  void dispose() {
+    name.dispose();
+    phone.dispose();
+    address.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: Text(widget.customer ? 'Add customer' : 'Add supplier'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(
+              controller: name,
+              decoration: const InputDecoration(labelText: 'Name')),
+          const SizedBox(height: 10),
+          TextField(
+              controller: phone,
+              decoration: const InputDecoration(labelText: 'Phone')),
+          const SizedBox(height: 10),
+          TextField(
+              controller: address,
+              decoration: const InputDecoration(labelText: 'Address')),
+        ]),
+        actions: [
+          TextButton(
+              onPressed: busy ? null : () => Navigator.pop(context),
+              child: const Text('Cancel')),
+          FilledButton(
+            onPressed: busy ? null : _save,
+            child: Text(busy ? 'Saving...' : 'Save'),
+          ),
+        ],
+      );
+
+  Future<void> _save() async {
+    if (name.text.trim().isEmpty) return;
+    setState(() => busy = true);
+    try {
+      final db = widget.ref.read(databaseProvider);
+      if (widget.customer) {
+        await db.into(db.customers).insert(CustomersCompanion.insert(
+            name: name.text.trim(),
+            phone: Value(phone.text.trim()),
+            address: Value(address.text.trim())));
+      } else {
+        await db.into(db.suppliers).insert(SuppliersCompanion.insert(
+            name: name.text.trim(),
+            phone: Value(phone.text.trim()),
+            address: Value(address.text.trim())));
+      }
+      if (mounted) Navigator.pop(context);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => busy = false);
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('$error')));
+    }
+  }
 }

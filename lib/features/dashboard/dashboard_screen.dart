@@ -49,36 +49,44 @@ class DashboardScreen extends ConsumerWidget {
               Text('Quick actions',
                   style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 12),
-              Wrap(spacing: 10, runSpacing: 10, children: [
-                _Action(
-                    'New sale',
-                    Icons.add_shopping_cart,
-                    () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => const CheckoutScreen()))),
-                _Action(
-                    'Stock',
-                    Icons.swap_vert,
-                    () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => const InventoryScreen()))),
-                _Action(
-                    'Expenses',
-                    Icons.receipt_long,
-                    () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => const ExpensesScreen()))),
-                _Action(
-                    'Debts',
-                    Icons.credit_score,
-                    () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => const DebtsScreen()))),
-              ]),
+              GridView.count(
+                crossAxisCount: 2,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                mainAxisSpacing: 12,
+                crossAxisSpacing: 12,
+                childAspectRatio: 1.7,
+                children: [
+                  _Action(
+                      'New sale',
+                      Icons.add_shopping_cart,
+                      () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const CheckoutScreen()))),
+                  _Action(
+                      'Stock',
+                      Icons.swap_vert,
+                      () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const InventoryScreen()))),
+                  _Action(
+                      'Expenses',
+                      Icons.receipt_long,
+                      () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const ExpensesScreen()))),
+                  _Action(
+                      'Debts',
+                      Icons.credit_score,
+                      () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const DebtsScreen()))),
+                ],
+              ),
               const SizedBox(height: 24),
               Consumer(builder: (c, ref, _) {
                 final ps = ref.watch(productsProvider).valueOrNull ?? [];
@@ -137,6 +145,64 @@ class _Action extends StatelessWidget {
   final VoidCallback f;
   const _Action(this.t, this.i, this.f);
   @override
-  Widget build(BuildContext c) =>
-      ActionChip(avatar: Icon(i), label: Text(t), onPressed: f);
+  Widget build(BuildContext c) {
+    final colors = Theme.of(c).colorScheme;
+    final (background, iconColor, onIcon, foreground) = switch (t) {
+      'Stock' => (
+          colors.secondaryContainer,
+          colors.secondary,
+          colors.onSecondary,
+          colors.onSecondaryContainer,
+        ),
+      'Expenses' => (
+          colors.tertiaryContainer,
+          colors.tertiary,
+          colors.onTertiary,
+          colors.onTertiaryContainer,
+        ),
+      'Debts' => (
+          colors.surfaceContainerHighest,
+          colors.primary,
+          colors.onPrimary,
+          colors.onSurface,
+        ),
+      _ => (
+          colors.primaryContainer,
+          colors.primary,
+          colors.onPrimary,
+          colors.onPrimaryContainer,
+        ),
+    };
+    return Card(
+      color: background,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: f,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: iconColor,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(i, color: onIcon, size: 25),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                t,
+                style: Theme.of(c).textTheme.titleMedium?.copyWith(
+                      color: foreground,
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
 }

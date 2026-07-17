@@ -1,0 +1,4 @@
+project_id = "market-mate"
+
+[functions.paystack]
+verify_jwt = false

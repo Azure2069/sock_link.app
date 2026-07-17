@@ -21,6 +21,7 @@ dependencies:
   printing: ^5.14.2
   url_launcher: ^6.3.1
   shared_preferences: ^2.5.3
+  supabase_flutter: ^2.9.1
   cupertino_icons: ^1.0.8
 
 dev_dependencies:
@@ -29,6 +30,27 @@ dev_dependencies:
   flutter_lints: ^5.0.0
   drift_dev: ^2.26.0
   build_runner: ^2.4.15
+  flutter_launcher_icons: ^0.14.4
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/marketMate.PNG
+
+flutter_launcher_icons:
+  image_path: assets/marketMate.PNG
+  android: true
+  ios: true
+  remove_alpha_ios: true
+  web:
+    generate: true
+    image_path: assets/marketMate.PNG
+    background_color: "#F3F8EA"
+    theme_color: "#08783E"
+  windows:
+    generate: true
+    image_path: assets/marketMate.PNG
+    icon_size: 256
+  macos:
+    generate: true
+    image_path: assets/marketMate.PNG
